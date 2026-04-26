@@ -8,7 +8,7 @@ A real-time trade journal with idempotent writes, async metrics, JWT
 multi-tenancy, and a 200 RPS load-tested write path.
 
 - live URL: https://parthdagia-tradingplatform-backend.hf.space
-- repo: https://github.com/parthdagia05/TradingPlatform-Backend
+- k6 load-test report: https://parthdagia-tradingplatform-backend.hf.space/loadtest/report.html
 
 ## Run it
 
