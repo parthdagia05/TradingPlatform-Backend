@@ -45,6 +45,15 @@ func skipIfShort(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test (-short)")
 	}
+	// also skip cleanly when no API is reachable, so `go test ./...` on a
+	// dev machine without `docker compose up` running stays green-or-skipped
+	// rather than failing.
+	cli := &http.Client{Timeout: 2 * time.Second}
+	res, err := cli.Get(apiURL() + "/health")
+	if err != nil {
+		t.Skipf("skipping: API at %s is not reachable (%v) - run `docker compose up` or set API_URL", apiURL(), err)
+	}
+	res.Body.Close()
 }
 
 // tokenFor issues a 24h JWT for the user. Tests use the spec's exact secret.
@@ -155,4 +164,70 @@ func TestHealthReturnsState(t *testing.T) {
 	require.Equal(t, "ok", body["status"])
 	require.Equal(t, "connected", body["dbConnection"])
 	require.NotNil(t, body["queueLag"])
+}
+
+// TEST: posting a closed trade flows through the async pipeline
+//
+// End-to-end proof of the spec's "metrics computed asynchronously outside
+// the write path" rule: read Alex's calm wins/losses, POST a brand-new
+// closed winning trade with emotionalState=calm, poll the metrics endpoint
+// until the calm.wins counter increments. If the worker isn't consuming or
+// the producer/consumer wiring is broken, this test times out.
+func TestMetricsUpdateAfterPost(t *testing.T) {
+	skipIfShort(t)
+	tok := tokenFor(t, userA)
+
+	metricsURL := fmt.Sprintf("/users/%s/metrics?from=%s&to=%s&granularity=daily",
+		userA,
+		time.Now().Add(-365*24*time.Hour).UTC().Format(time.RFC3339),
+		time.Now().Add(365*24*time.Hour).UTC().Format(time.RFC3339),
+	)
+
+	calmWins := func() float64 {
+		var resp map[string]any
+		require.Equal(t, 200, doJSON(t, "GET", metricsURL, tok, nil, &resp))
+		stats, _ := resp["winRateByEmotionalState"].(map[string]any)
+		calm, _ := stats["calm"].(map[string]any)
+		if calm == nil {
+			return 0
+		}
+		w, _ := calm["wins"].(float64)
+		return w
+	}
+
+	before := calmWins()
+
+	// post a calm/win trade we know hasn't been seen before
+	body := map[string]any{
+		"tradeId":        uuid.NewString(),
+		"userId":         userA,
+		"sessionId":      uuid.NewString(),
+		"asset":          "AAPL",
+		"assetClass":     "equity",
+		"direction":      "long",
+		"entryPrice":     100,
+		"exitPrice":      110, // win
+		"quantity":       1,
+		"entryAt":        time.Now().Add(-time.Hour).UTC().Format(time.RFC3339),
+		"exitAt":         time.Now().UTC().Format(time.RFC3339),
+		"status":         "closed",
+		"planAdherence":  5,
+		"emotionalState": "calm",
+	}
+	require.Equal(t, 200, doJSON(t, "POST", "/trades", tok, body, nil))
+
+	// poll until the worker has applied the WinRateByEmotion calc
+	deadline := time.Now().Add(10 * time.Second)
+	var after float64
+	for time.Now().Before(deadline) {
+		after = calmWins()
+		if after >= before+1 {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	require.GreaterOrEqual(t, after, before+1,
+		"calm wins should have incremented within 10s (before=%v after=%v) - worker may not be consuming",
+		before, after)
 }

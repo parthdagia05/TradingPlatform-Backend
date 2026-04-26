@@ -5,6 +5,43 @@ The kickoff PDF made this file a graded deliverable.
 
 ---
 
+## Architecture at a glance
+
+```
+                                                  fire-and-forget
+                                                 (200ms timeout, 1 retry)
+                                                       |
+   +--------+   POST /trades   +-------+   INSERT     |     +---------------+
+   | client | ---------------> |  api  | ---------------+--> | postgres 16   |
+   +--------+   GET .../metrics|       | <----- read aggs    | (trades +     |
+        ^      GET /health     |       |                     |  metric tabs) |
+        |                      +-------+                     +-------^-------+
+        |                          |                                 |
+        |                          | XADD trade.opened|closed        | UPDATE / UPSERT
+        |                          v                                 |
+        |                      +-------+                       +-----------+
+        |                      | redis |  XREADGROUP           |  worker   |
+        |                      |stream | --------------------> | (5 metric |
+        |                      +-------+                       |  calcs)   |
+        |                                                       +-----+-----+
+        |                                                             |
+        +-------------- response (always with traceId) ----------------+
+
+   reads serve from the metric snapshot tables; the timeseries part of the
+   response is computed on the fly from `trades` using
+   idx_trades_user_entry (Bitmap Index Scan, ~0.13 ms p95).
+
+   the write path NEVER blocks on the queue. a slow Redis only delays
+   metric freshness, not the 200 OK to the client.
+```
+
+Module layout: `cmd/api` and `cmd/worker` share `internal/*`. Two binaries
+from one image (Dockerfile multi-stage) keep them in lockstep on the queue
+contract, the trade schema, and the JWT verifier. `docker-compose.yml`
+runs them as separate services so a worker crash doesn't block the API.
+
+---
+
 ## Language: Go
 
 Go's HTTP performance, single-binary deployability, and `go test` were the
