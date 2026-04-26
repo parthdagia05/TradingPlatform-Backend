@@ -178,6 +178,38 @@ DECISIONS.md    architectural rationale
 * [internal/trades/repo.go](internal/trades/repo.go) — idempotent insert
 * [internal/metrics/](internal/metrics) — the 5 calculators
 
+## Deploying to HuggingFace Spaces (free tier, recommended)
+
+HF Spaces gives 16 GB RAM + 2 vCPU free, faster builds than EC2 t3.micro,
+and an HTTPS URL out of the box. Caveat: HF only runs a **single container**,
+so all four services bundle into one image (`deploy/hfspaces/Dockerfile`).
+The repo's `docker-compose.yml` stays as the canonical multi-service deploy
+for reviewers running it locally.
+
+### One-time setup
+
+1. Go to https://huggingface.co/new-space
+2. **Owner** = your username, **Space name** = `tradingplatform-backend`,
+   **License** = MIT, **SDK** = Docker → Blank, **Hardware** = CPU basic (free),
+   **Visibility** = Public. Click **Create Space**.
+3. Generate a write token at https://huggingface.co/settings/tokens
+   (Type: **Write**, save it once — won't be shown again).
+
+### Deploy
+
+```bash
+HF_USERNAME=<you> HF_SPACE=tradingplatform-backend HF_TOKEN=hf_xxx \
+  bash scripts/deploy-hfspaces.sh
+```
+
+The script clones the Space, rsyncs your repo into it, swaps in the
+HF-specific Dockerfile + README, commits, and pushes. HF rebuilds the
+Space (~3-5 min). Done URL:
+
+```
+https://<you>-tradingplatform-backend.hf.space
+```
+
 ## Deploying to AWS EC2 (free tier)
 
 The simplest production path: a single t3.micro running `docker compose up`.
