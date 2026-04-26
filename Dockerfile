@@ -48,6 +48,8 @@ COPY --from=builder /out/worker /app/worker
 # Copy the assets the binaries read at runtime.
 COPY --from=builder /src/migrations /app/migrations
 COPY --from=builder /src/nevup_seed_dataset.csv /app/nevup_seed_dataset.csv
+# bundle the load-test report so /loadtest/report.html serves on the live URL
+COPY --from=builder /src/loadtest /app/loadtest
 
 # Run as a non-root user. If the container is ever compromised, the attacker
 # doesn't immediately own the host file system.

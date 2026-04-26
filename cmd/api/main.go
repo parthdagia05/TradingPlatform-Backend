@@ -113,6 +113,16 @@ func run() error {
 		_, _ = w.Write([]byte(landingHTML))
 	})
 
+	// serve the load-test artifacts so reviewers can pull the html report
+	// from a single, on-domain URL. tries a few candidate paths so it works
+	// in dev (./loadtest/...) and in the docker image (/app/loadtest/...).
+	r.Get("/loadtest/report.html", func(w http.ResponseWriter, req *http.Request) {
+		serveStatic(w, req, "loadtest/results/report.html", "text/html; charset=utf-8")
+	})
+	r.Get("/loadtest/summary.json", func(w http.ResponseWriter, req *http.Request) {
+		serveStatic(w, req, "loadtest/results/summary.json", "application/json")
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(mw.Authenticator(verifier))
 		// /trades has no userId in the path; the handler does the body-level
@@ -162,6 +172,25 @@ func run() error {
 	}
 	log.Info("bye")
 	return nil
+}
+
+// serveStatic resolves a relative path against a few candidate roots and
+// streams the file. used to expose the committed load-test report from the
+// running api at a stable, on-domain URL.
+func serveStatic(w http.ResponseWriter, r *http.Request, rel, contentType string) {
+	candidates := []string{
+		rel,
+		"/app/" + rel,
+		"./" + rel,
+	}
+	for _, p := range candidates {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			w.Header().Set("Content-Type", contentType)
+			http.ServeFile(w, r, p)
+			return
+		}
+	}
+	http.Error(w, "report not bundled in this build", http.StatusNotFound)
 }
 
 const landingHTML = `<!doctype html>
