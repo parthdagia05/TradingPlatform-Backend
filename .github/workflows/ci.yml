@@ -18,20 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # one Postgres for the unit-test step. bound to 55432 so it doesn't
+    # collide with the docker-compose stack we spin up later in the same job
+    # (which uses the standard 5432).
     services:
-      postgres:
+      test_postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: nevup
           POSTGRES_PASSWORD: nevup
           POSTGRES_DB: nevup
-        ports: ['5432:5432']
+        ports: ['55432:5432']
         options: >-
           --health-cmd "pg_isready -U nevup -d nevup"
           --health-interval 2s --health-timeout 3s --health-retries 15
-      redis:
-        image: redis:7-alpine
-        ports: ['6379:6379']
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
 
       - name: unit tests (real Postgres for metric calculators)
         env:
-          TEST_DATABASE_URL: postgres://nevup:nevup@localhost:5432/nevup?sslmode=disable
+          TEST_DATABASE_URL: postgres://nevup:nevup@localhost:55432/nevup?sslmode=disable
         run: go test -count=1 ./internal/...
 
       - name: docker compose up (full stack from a clean machine)
