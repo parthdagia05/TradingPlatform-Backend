@@ -21,15 +21,33 @@ echo " NevUp Track 1 — EC2 deploy"
 echo "──────────────────────────────────────────────────────────"
 
 # ── 1. Install Docker + compose plugin if missing ──────────────────────────
+# Ubuntu's compose plugin package is "docker-compose-v2" (universe).
+# Docker's own apt repo calls the same thing "docker-compose-plugin".
+# We try both so the script works on either repo source.
 if ! command -v docker >/dev/null 2>&1; then
   echo "[1/4] Installing Docker..."
   sudo apt-get update -y
-  sudo apt-get install -y --no-install-recommends \
-    docker.io docker-compose-plugin
+  sudo apt-get install -y --no-install-recommends docker.io
   sudo systemctl enable --now docker
 else
   echo "[1/4] Docker already installed: $(docker --version)"
 fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "       Installing compose plugin..."
+  if apt-cache show docker-compose-v2 >/dev/null 2>&1; then
+    sudo apt-get install -y --no-install-recommends docker-compose-v2
+  elif apt-cache show docker-compose-plugin >/dev/null 2>&1; then
+    sudo apt-get install -y --no-install-recommends docker-compose-plugin
+  else
+    echo "       Neither package available; installing via curl..."
+    sudo mkdir -p /usr/local/lib/docker/cli-plugins
+    sudo curl -sSL \
+      https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose
+    sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  fi
+fi
+echo "       compose: $(docker compose version 2>&1 | head -1)"
 
 # Add the current user to the docker group (takes effect next login).
 if ! id -nG "$USER" | grep -qw docker; then
