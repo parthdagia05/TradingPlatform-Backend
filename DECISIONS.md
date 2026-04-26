@@ -171,6 +171,26 @@ service averages well below this with bursts at market open), and
 (c) hitting it on a single Go process + single Postgres node demonstrates the
 architecture has headroom — not that it was tuned to the test.
 
+### Actual run results (loadtest/results/report.html, summary.json)
+
+```
+target  : 200 RPS for 60s, p95 ≤ 150 ms, error rate < 1 %
+actual  : 12,000 requests / 0.00 % failure / p95 = 2.8 ms / max = 38.6 ms
+```
+
+p95 came in 53× below the spec budget — confirming the indexes + async-
+pipeline architecture have ample headroom.
+
+### Why the run was against the local stack, not the deployed URL
+
+The HuggingFace Spaces deployment passes every functional contract test
+(idempotency, cross-tenant 403, /health, async pipeline) but HF's edge
+proxy rate-limits free-tier Spaces well below 200 RPS — the throughput
+test against the public URL returns HTTP 429 from HF's reverse proxy
+before the request reaches our container. Reviewers running `docker
+compose up` from the repo (which the spec asks for as the local-test
+path) see the unconstrained server-side numbers shown above.
+
 ## Logging: stdlib `log/slog`
 
 Go 1.21's stdlib structured logger gives us exactly the fields the spec
