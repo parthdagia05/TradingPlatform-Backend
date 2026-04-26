@@ -54,6 +54,7 @@ COPY deploy/hfspaces/start.sh /app/start.sh
 RUN mkdir -p /var/lib/postgresql/data /run/postgresql /var/lib/redis /tmp/logs \
  && chown -R postgres:postgres /var/lib/postgresql/data /run/postgresql \
  && chown -R redis:redis       /var/lib/redis \
+ && chmod 1777 /tmp/logs \
  && chmod +x /app/start.sh
 
 # Defaults — every value is overridable via HF Spaces' Variables UI if you
