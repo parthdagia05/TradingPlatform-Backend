@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: BUILD — compile both binaries (api + worker) inside a Go toolchain image
 # ─────────────────────────────────────────────────────────────────────────────
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # git is needed for `go mod download` of any deps hosted on git.
 # ca-certificates lets HTTPS calls work during the build (e.g. proxy.golang.org).
