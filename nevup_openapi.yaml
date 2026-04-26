@@ -1,0 +1,704 @@
+openapi: 3.0.3
+info:
+  title: NevUp Trade Journal API
+  description: |
+    NevUp Hiring Hackathon 2026 — Mock API Specification.
+    
+    This spec defines the shared contract between all three tracks.
+    Track 3 (Frontend) must consume these endpoints exactly as defined.
+    Track 1 (Backend) must implement them exactly as defined.
+    Track 2 (AI Engine) uses the behavioral metrics and session data.
+
+    **Running the mock server locally (no account needed):**
+    ```
+    npx @stoplight/prism-cli mock nevup_openapi.yaml --port 4010
+    ```
+    All Track 3 endpoints will then be live at http://localhost:4010
+
+  version: "1.0.0"
+  contact:
+    name: NevUp Hackathon Organizers
+
+servers:
+  - url: http://localhost:4010
+    description: Local mock server (Prism)
+  - url: https://api.nevup.dev/v1
+    description: Production (Track 1 live deployment)
+
+security:
+  - BearerAuth: []
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── TRADES ──────────────────────────────────────────────────────────────────
+
+  /trades:
+    post:
+      summary: Submit a new trade
+      description: |
+        Idempotent on tradeId. Duplicate submissions must return HTTP 200
+        with the existing record — not 500 or 409.
+      operationId: createTrade
+      tags: [Trades]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TradeInput'
+            example:
+              tradeId: "550e8400-e29b-41d4-a716-446655440000"
+              userId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              sessionId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+              asset: "AAPL"
+              assetClass: "equity"
+              direction: "long"
+              entryPrice: 178.45
+              exitPrice: 182.30
+              quantity: 10
+              entryAt: "2025-01-06T09:35:00Z"
+              exitAt: "2025-01-06T11:20:00Z"
+              status: "closed"
+              planAdherence: 4
+              emotionalState: "calm"
+              entryRationale: "Breakout above key resistance with volume confirmation"
+      responses:
+        '200':
+          description: Trade created (or already exists — idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trade'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /trades/{tradeId}:
+    get:
+      summary: Get a single trade by ID
+      operationId: getTrade
+      tags: [Trades]
+      parameters:
+        - name: tradeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Trade record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trade'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── SESSIONS ─────────────────────────────────────────────────────────────────
+
+  /sessions/{sessionId}:
+    get:
+      summary: Get session summary with full trade list
+      operationId: getSession
+      tags: [Sessions]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session summary and all trades in the session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSummary'
+              example:
+                sessionId: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                userId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                date: "2025-01-06T09:30:00Z"
+                notes: "Solid morning session, stayed disciplined"
+                tradeCount: 5
+                winRate: 0.8
+                totalPnl: 312.50
+                trades: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/debrief:
+    post:
+      summary: Submit post-session debrief answers
+      description: Called at step 5 of the debrief flow to persist the trader's reflections.
+      operationId: submitDebrief
+      tags: [Sessions]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebriefInput'
+            example:
+              overallMood: "calm"
+              keyMistake: "Held a losing trade too long on trade 3"
+              keyLesson: "Exit when the setup invalidates, not when the loss hurts"
+              planAdherenceRating: 4
+              willReviewTomorrow: true
+      responses:
+        '201':
+          description: Debrief saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  debriefId:
+                    type: string
+                    format: uuid
+                  sessionId:
+                    type: string
+                    format: uuid
+                  savedAt:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sessions/{sessionId}/coaching:
+    get:
+      summary: Stream AI coaching message (SSE)
+      description: |
+        Server-Sent Events endpoint. Streams the coaching message token-by-token.
+        
+        **Track 3 requirement:** Must render tokens as they arrive.
+        Must degrade gracefully on connection drop — show "Reconnecting..."
+        with exponential backoff. A blank/frozen screen on disconnect is a
+        grading failure.
+
+        **SSE event format:**
+        ```
+        event: token
+        data: {"token": "You", "index": 0}
+
+        event: token
+        data: {"token": " showed", "index": 1}
+
+        event: done
+        data: {"fullMessage": "You showed strong discipline today..."}
+        ```
+      operationId: streamCoaching
+      tags: [Sessions]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SSE stream of coaching tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream — see description for event format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── USERS / METRICS ──────────────────────────────────────────────────────────
+
+  /users/{userId}/metrics:
+    get:
+      summary: Get behavioral metrics timeseries for a user
+      operationId: getUserMetrics
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          example: "2025-01-01T00:00:00Z"
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          example: "2025-03-31T23:59:59Z"
+        - name: granularity
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [hourly, daily, rolling30d]
+      responses:
+        '200':
+          description: Behavioral metrics timeseries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BehavioralMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{userId}/profile:
+    get:
+      summary: Get behavioral profile for a user
+      description: Returns the AI-generated behavioral profile with pattern analysis.
+      operationId: getUserProfile
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Behavioral profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BehavioralProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── HEALTH ───────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns queue lag and DB connection state. No auth required.
+      operationId: healthCheck
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: System healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "ok"
+                dbConnection: "connected"
+                queueLag: 12
+                timestamp: "2025-01-06T09:35:00Z"
+        '503':
+          description: System degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT issued at login. See jwt_format.md for the canonical token structure.
+        Every endpoint enforces row-level tenancy — the userId in the JWT must
+        match the data being accessed. Cross-tenant reads return HTTP 403.
+
+  schemas:
+
+    # ── TRADE ──────────────────────────────────────────────────────────────────
+
+    TradeInput:
+      type: object
+      required:
+        - tradeId
+        - userId
+        - sessionId
+        - asset
+        - assetClass
+        - direction
+        - entryPrice
+        - quantity
+        - entryAt
+        - status
+      properties:
+        tradeId:
+          type: string
+          format: uuid
+          description: UUIDv4. Submission is idempotent on this field.
+        userId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+          description: Groups trades belonging to one trading session.
+        asset:
+          type: string
+          example: "AAPL"
+        assetClass:
+          type: string
+          enum: [equity, crypto, forex]
+        direction:
+          type: string
+          enum: [long, short]
+        entryPrice:
+          type: number
+          format: decimal
+          description: decimal(18,8)
+        exitPrice:
+          type: number
+          format: decimal
+          nullable: true
+          description: null if trade is still open
+        quantity:
+          type: number
+          format: decimal
+          description: decimal(18,8)
+        entryAt:
+          type: string
+          format: date-time
+          description: ISO-8601 UTC
+        exitAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO-8601 UTC. null if trade is still open.
+        status:
+          type: string
+          enum: [open, closed, cancelled]
+        planAdherence:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+          description: User self-rating at close. null if trade not yet closed.
+        emotionalState:
+          type: string
+          enum: [calm, anxious, greedy, fearful, neutral]
+          nullable: true
+        entryRationale:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    Trade:
+      allOf:
+        - $ref: '#/components/schemas/TradeInput'
+        - type: object
+          properties:
+            outcome:
+              type: string
+              enum: [win, loss]
+              nullable: true
+            pnl:
+              type: number
+              nullable: true
+              description: Computed P&L. null if trade is open.
+            revengeFlag:
+              type: boolean
+              description: |
+                True if trade opened within 90s of a losing close
+                AND emotionalState is anxious or fearful.
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    # ── SESSION ────────────────────────────────────────────────────────────────
+
+    SessionSummary:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+        tradeCount:
+          type: integer
+        winRate:
+          type: number
+          format: float
+          description: 0.0 – 1.0
+        totalPnl:
+          type: number
+        trades:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+
+    DebriefInput:
+      type: object
+      required:
+        - overallMood
+        - planAdherenceRating
+      properties:
+        overallMood:
+          type: string
+          enum: [calm, anxious, greedy, fearful, neutral]
+        keyMistake:
+          type: string
+          maxLength: 1000
+          nullable: true
+        keyLesson:
+          type: string
+          maxLength: 1000
+          nullable: true
+        planAdherenceRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        willReviewTomorrow:
+          type: boolean
+          default: false
+
+    # ── METRICS ────────────────────────────────────────────────────────────────
+
+    BehavioralMetrics:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        granularity:
+          type: string
+          enum: [hourly, daily, rolling30d]
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        planAdherenceScore:
+          type: number
+          description: Rolling 10-trade average of planAdherence ratings.
+        sessionTiltIndex:
+          type: number
+          description: Ratio of loss-following trades to total trades in current session.
+        winRateByEmotionalState:
+          type: object
+          description: Per-user running win/loss count per emotional state.
+          additionalProperties:
+            type: object
+            properties:
+              wins:
+                type: integer
+              losses:
+                type: integer
+              winRate:
+                type: number
+          example:
+            calm:
+              wins: 42
+              losses: 18
+              winRate: 0.7
+            anxious:
+              wins: 5
+              losses: 15
+              winRate: 0.25
+        revengeTrades:
+          type: integer
+          description: Count of trades flagged as revenge trades in the period.
+        overtradingEvents:
+          type: integer
+          description: Count of overtrading events emitted in the period.
+        timeseries:
+          type: array
+          description: Bucketed data points per granularity unit.
+          items:
+            type: object
+            properties:
+              bucket:
+                type: string
+                format: date-time
+              tradeCount:
+                type: integer
+              winRate:
+                type: number
+              pnl:
+                type: number
+              avgPlanAdherence:
+                type: number
+
+    # ── PROFILE ────────────────────────────────────────────────────────────────
+
+    BehavioralProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        generatedAt:
+          type: string
+          format: date-time
+        dominantPathologies:
+          type: array
+          items:
+            type: object
+            properties:
+              pathology:
+                type: string
+                enum:
+                  - revenge_trading
+                  - overtrading
+                  - fomo_entries
+                  - plan_non_adherence
+                  - premature_exit
+                  - loss_running
+                  - session_tilt
+                  - time_of_day_bias
+                  - position_sizing_inconsistency
+              confidence:
+                type: number
+                description: 0.0 – 1.0
+              evidenceSessions:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: |
+                  SessionIds that support this claim.
+                  Generic claims without evidence are a grading failure.
+              evidenceTrades:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+        strengths:
+          type: array
+          items:
+            type: string
+        peakPerformanceWindow:
+          type: object
+          nullable: true
+          properties:
+            startHour:
+              type: integer
+              description: UTC hour (0–23)
+            endHour:
+              type: integer
+            winRate:
+              type: number
+
+    # ── SYSTEM ─────────────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        dbConnection:
+          type: string
+          enum: [connected, disconnected]
+        queueLag:
+          type: integer
+          description: Message queue lag in milliseconds.
+        timestamp:
+          type: string
+          format: date-time
+
+    # ── ERRORS ─────────────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      required: [error, message, traceId]
+      properties:
+        error:
+          type: string
+          example: "TRADE_NOT_FOUND"
+        message:
+          type: string
+          example: "Trade with the given tradeId does not exist."
+        traceId:
+          type: string
+          description: Structured log correlation ID.
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: |
+        Authenticated user does not have access to this resource.
+        Cross-tenant reads always return 403 — never 404.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

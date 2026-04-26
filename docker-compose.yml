@@ -1,0 +1,121 @@
+# docker-compose.yml — single source of truth for the entire local/CI stack.
+#
+# Reviewer experience:
+#   docker compose up --build
+# That's it. Postgres + Redis + API + worker all come up healthy and
+# the seed CSV is loaded automatically.
+#
+# Service graph:
+#
+#   ┌──────────┐   ┌─────────┐
+#   │ postgres │   │  redis  │
+#   └────▲─────┘   └────▲────┘
+#        │              │
+#   ┌────┴──────────────┴────┐
+#   │           api           │  ← exposes :8080 to host
+#   └────────────────────────┘
+#                              \
+#                               \─ shares Postgres + Redis
+#   ┌────────────────────────┐ /
+#   │         worker          │
+#   └────────────────────────┘
+
+services:
+
+  # ── Postgres 16 ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nevup
+      POSTGRES_PASSWORD: nevup
+      POSTGRES_DB: nevup
+    ports:
+      - "5432:5432"           # exposed to host so you can `psql` from your laptop
+    volumes:
+      - postgres_data:/var/lib/postgresql/data    # persist data across restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nevup -d nevup"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  # ── Redis 7 (used as our message queue via Streams) ───────────────────────
+  redis:
+    image: redis:7-alpine
+    # AOF (append-only file) gives us durability — entries written to the
+    # stream survive `docker compose restart`. Without this, a worker crash
+    # would lose un-acked events.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+
+  # ── API server (HTTP) ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      # NOTE: host = "postgres" / "redis" — the docker-compose service names,
+      # NOT localhost. localhost inside the container would mean the container
+      # itself, which has no DB or Redis listening.
+      DATABASE_URL: "postgres://nevup:nevup@postgres:5432/nevup?sslmode=disable"
+      REDIS_URL: "redis://redis:6379/0"
+      JWT_SECRET: "97791d4db2aa5f689c3cc39356ce35762f0a73aa70923039d8ef72a2840a1b02"
+      LOG_LEVEL: "info"
+      SEED_ON_START: "true"
+      SEED_FILE_PATH: "/app/nevup_seed_dataset.csv"
+      MIGRATIONS_DIR: "/app/migrations"
+      STREAM_NAME: "trade-events"
+      CONSUMER_GROUP: "metrics-workers"
+      CONSUMER_NAME: "api-producer"   # API only produces, doesn't consume
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Async metrics worker ──────────────────────────────────────────────────
+  # Same image as `api`, different entrypoint. This is the cmd/<name> pattern
+  # paying off — one Docker build, two roles.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/app/worker"]      # override Dockerfile's ENTRYPOINT
+    environment:
+      DATABASE_URL: "postgres://nevup:nevup@postgres:5432/nevup?sslmode=disable"
+      REDIS_URL: "redis://redis:6379/0"
+      JWT_SECRET: "97791d4db2aa5f689c3cc39356ce35762f0a73aa70923039d8ef72a2840a1b02"
+      LOG_LEVEL: "info"
+      STREAM_NAME: "trade-events"
+      CONSUMER_GROUP: "metrics-workers"
+      CONSUMER_NAME: "worker-1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        # Wait for the API to finish migrations + seed before the worker starts
+        # consuming. Avoids a race where the worker tries to UPDATE a metric row
+        # whose table hasn't been created yet.
+        condition: service_started
+    restart: unless-stopped
+
+# ── Named volumes (persist across `docker compose down`) ────────────────────
+volumes:
+  postgres_data:
+  redis_data:

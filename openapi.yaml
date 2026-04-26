@@ -1,0 +1,212 @@
+openapi: 3.0.3
+info:
+  title: NevUp Trade Journal API — Track 1 (System of Record)
+  description: |
+    The endpoints implemented by this Track 1 backend. Faithful subset of the
+    shared `nevup_openapi.yaml` contract from the hackathon kickoff packet —
+    frontend (Track 3) endpoints are intentionally omitted because Track 1 does
+    not own them.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8080
+    description: Local docker-compose
+  - url: https://api.nevup.dev/v1
+    description: Production deployment
+
+security:
+  - BearerAuth: []
+
+paths:
+
+  /trades:
+    post:
+      summary: Submit a new trade (idempotent on tradeId)
+      description: |
+        Idempotent: duplicate submissions return HTTP 200 with the existing
+        record (never 409, never 500). Cross-tenant writes return 403.
+      operationId: createTrade
+      tags: [Trades]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TradeInput' }
+      responses:
+        '200':
+          description: Trade created (or already exists — idempotent)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trade' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /trades/{tradeId}:
+    get:
+      summary: Get a single trade
+      operationId: getTrade
+      tags: [Trades]
+      parameters:
+        - name: tradeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Trade record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Trade' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{userId}/metrics:
+    get:
+      summary: Behavioural metrics timeseries for a user
+      operationId: getUserMetrics
+      tags: [Users]
+      parameters:
+        - { name: userId,      in: path,  required: true,  schema: { type: string, format: uuid } }
+        - { name: from,        in: query, required: true,  schema: { type: string, format: date-time } }
+        - { name: to,          in: query, required: true,  schema: { type: string, format: date-time } }
+        - { name: granularity, in: query, required: true,  schema: { type: string, enum: [hourly, daily, rolling30d] } }
+      responses:
+        '200':
+          description: Behavioural metrics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BehavioralMetrics' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /health:
+    get:
+      summary: Health check (no auth)
+      operationId: healthCheck
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: System healthy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+        '503':
+          description: System degraded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    TradeInput:
+      type: object
+      required: [tradeId, userId, sessionId, asset, assetClass, direction, entryPrice, quantity, entryAt, status]
+      properties:
+        tradeId:        { type: string, format: uuid }
+        userId:         { type: string, format: uuid }
+        sessionId:      { type: string, format: uuid }
+        asset:          { type: string }
+        assetClass:     { type: string, enum: [equity, crypto, forex] }
+        direction:      { type: string, enum: [long, short] }
+        entryPrice:     { type: number }
+        exitPrice:      { type: number, nullable: true }
+        quantity:       { type: number }
+        entryAt:        { type: string, format: date-time }
+        exitAt:         { type: string, format: date-time, nullable: true }
+        status:         { type: string, enum: [open, closed, cancelled] }
+        planAdherence:  { type: integer, minimum: 1, maximum: 5, nullable: true }
+        emotionalState: { type: string, enum: [calm, anxious, greedy, fearful, neutral], nullable: true }
+        entryRationale: { type: string, maxLength: 500, nullable: true }
+
+    Trade:
+      allOf:
+        - $ref: '#/components/schemas/TradeInput'
+        - type: object
+          properties:
+            outcome:     { type: string, enum: [win, loss], nullable: true }
+            pnl:         { type: number, nullable: true }
+            revengeFlag: { type: boolean }
+            createdAt:   { type: string, format: date-time }
+            updatedAt:   { type: string, format: date-time }
+
+    BehavioralMetrics:
+      type: object
+      properties:
+        userId:             { type: string, format: uuid }
+        granularity:        { type: string, enum: [hourly, daily, rolling30d] }
+        from:               { type: string, format: date-time }
+        to:                 { type: string, format: date-time }
+        planAdherenceScore: { type: number, nullable: true }
+        sessionTiltIndex:   { type: number, nullable: true }
+        winRateByEmotionalState:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              wins:    { type: integer }
+              losses:  { type: integer }
+              winRate: { type: number }
+        revengeTrades:     { type: integer }
+        overtradingEvents: { type: integer }
+        timeseries:
+          type: array
+          items:
+            type: object
+            properties:
+              bucket:           { type: string, format: date-time }
+              tradeCount:       { type: integer }
+              winRate:          { type: number }
+              pnl:              { type: number }
+              avgPlanAdherence: { type: number }
+
+    HealthResponse:
+      type: object
+      properties:
+        status:       { type: string, enum: [ok, degraded] }
+        dbConnection: { type: string, enum: [connected, disconnected] }
+        queueLag:     { type: integer }
+        timestamp:    { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      required: [error, message, traceId]
+      properties:
+        error:   { type: string }
+        message: { type: string }
+        traceId: { type: string }
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: |
+        Cross-tenant access denied. Returns 403, never 404 — per the hackathon
+        spec's row-level tenancy rule.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

@@ -1,0 +1,33 @@
+# Compiled binaries (Go produces native executables, not bytecode)
+/bin/
+/api
+/worker
+*.exe
+*.test
+*.out
+
+# Test coverage output
+coverage.out
+coverage.html
+
+# Local environment file (never commit secrets)
+.env
+.env.local
+
+# IDE / editor noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Load-test artifacts (generated, not source)
+/loadtest/results/
+/loadtest/*.json
+!/loadtest/k6.js
+
+# Go module cache (only for forks/vendoring scenarios)
+/vendor/
+
+# Local-stack ephemerals (created by scripts/local-stack.sh and cmd/devstack)
+/tmp/
+*.devstack.log
