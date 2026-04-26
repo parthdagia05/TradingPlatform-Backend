@@ -11,14 +11,20 @@ import (
 
 // Message wraps a single stream entry pulled by a consumer.
 // Ack() must be called once the message has been processed successfully -
-// unacked messages are redelivered to another consumer after the visibility
-// timeout (5s here), giving us at-least-once delivery semantics.
+// unacked messages stay in the consumer-group's PEL (pending entries list)
+// and are redelivered via XCLAIM after they go idle, giving us at-least-once
+// delivery semantics.
+//
+// DeliveryCount is 1 on first read (XREADGROUP). On a redelivery picked up by
+// ClaimStuck() it carries Redis's running count, which lets the worker
+// dead-letter poison messages instead of looping forever.
 type Message struct {
-	ID     string
-	Stream string
-	Group  string
-	Event  Event
-	rdb    *redis.Client
+	ID            string
+	Stream        string
+	Group         string
+	Event         Event
+	DeliveryCount int64
+	rdb           *redis.Client
 }
 
 // Ack tells Redis "I processed this; don't redeliver." Idempotent.
@@ -90,13 +96,79 @@ func (c *Consumer) Read(ctx context.Context, count int64, block time.Duration) (
 				continue
 			}
 			out = append(out, Message{
-				ID:     m.ID,
-				Stream: c.stream,
-				Group:  c.group,
-				Event:  ev,
-				rdb:    c.rdb,
+				ID:            m.ID,
+				Stream:        c.stream,
+				Group:         c.group,
+				Event:         ev,
+				DeliveryCount: 1, // first delivery via ">" by definition
+				rdb:           c.rdb,
 			})
 		}
+	}
+	return out, nil
+}
+
+// ClaimStuck takes ownership of any messages that have been pending for at
+// least minIdle without being acked. Returns up to count of them, with the
+// real Redis-tracked DeliveryCount for each.
+//
+// Used by the worker to recover messages whose original consumer crashed,
+// got partitioned, or fell behind. Combined with the worker's "don't ack on
+// failure" rule, this is the at-least-once delivery loop the Redis Streams
+// docs describe.
+func (c *Consumer) ClaimStuck(ctx context.Context, minIdle time.Duration, count int64) ([]Message, error) {
+	pending, err := c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: c.stream,
+		Group:  c.group,
+		Idle:   minIdle,
+		Start:  "-",
+		End:    "+",
+		Count:  count,
+	}).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("xpending: %w", err)
+	}
+	if len(pending) == 0 {
+		return nil, nil
+	}
+
+	deliveries := make(map[string]int64, len(pending))
+	ids := make([]string, 0, len(pending))
+	for _, p := range pending {
+		ids = append(ids, p.ID)
+		deliveries[p.ID] = p.RetryCount
+	}
+
+	claimed, err := c.rdb.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   c.stream,
+		Group:    c.group,
+		Consumer: c.consumerName,
+		MinIdle:  minIdle,
+		Messages: ids,
+	}).Result()
+	if err != nil {
+		return nil, fmt.Errorf("xclaim: %w", err)
+	}
+
+	out := make([]Message, 0, len(claimed))
+	for _, m := range claimed {
+		ev, err := decodeValues(m.Values)
+		if err != nil {
+			// poison entry that won't ever decode - ack and drop
+			_ = c.rdb.XAck(ctx, c.stream, c.group, m.ID).Err()
+			continue
+		}
+		out = append(out, Message{
+			ID:            m.ID,
+			Stream:        c.stream,
+			Group:         c.group,
+			Event:         ev,
+			DeliveryCount: deliveries[m.ID],
+			rdb:           c.rdb,
+		})
 	}
 	return out, nil
 }

@@ -1,5 +1,7 @@
 # NevUp Trade Journal - Track 1
 
+[![CI](https://github.com/parthdagia05/TradingPlatform-Backend/actions/workflows/ci.yml/badge.svg)](https://github.com/parthdagia05/TradingPlatform-Backend/actions/workflows/ci.yml)
+
 NevUp Hiring Hackathon 2026 - Track 1 (System of Record).
 
 A real-time trade journal with idempotent writes, async metrics, JWT

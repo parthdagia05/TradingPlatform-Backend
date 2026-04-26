@@ -1,0 +1,81 @@
+name: CI
+
+# CI proves on every push that:
+#   1. the Go code builds, vets, and unit tests pass
+#   2. `docker compose up` brings up the full multi-service stack from cold
+#   3. all integration tests pass against that live stack
+# i.e. the spec's "single docker compose up - no manual steps" rule, witnessed
+# automatically. green badge on the repo home page is the proof.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: docker compose up + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nevup
+          POSTGRES_PASSWORD: nevup
+          POSTGRES_DB: nevup
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U nevup -d nevup"
+          --health-interval 2s --health-timeout 3s --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: unit tests (real Postgres for metric calculators)
+        env:
+          TEST_DATABASE_URL: postgres://nevup:nevup@localhost:5432/nevup?sslmode=disable
+        run: go test -count=1 ./internal/...
+
+      - name: docker compose up (full stack from a clean machine)
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      - name: smoke /health
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health | grep -q '"status":"ok"'; then
+              echo "api healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "api never became healthy"
+          docker compose logs --tail=80 api worker
+          exit 1
+
+      - name: integration tests against the live compose stack
+        env:
+          API_URL: http://localhost:8080
+        run: go test -v -count=1 ./tests/...
+
+      - name: dump compose logs (on failure)
+        if: failure()
+        run: docker compose logs --tail=200 api worker postgres redis
+
+      - name: docker compose down
+        if: always()
+        run: docker compose down -v
