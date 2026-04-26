@@ -107,6 +107,12 @@ func run() error {
 
 	healthHandler.Mount(r)
 
+	// landing page for anyone who lands on / in a browser (e.g. the HF Space UI)
+	r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(landingHTML))
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(mw.Authenticator(verifier))
 		// /trades has no userId in the path; the handler does the body-level
@@ -157,3 +163,40 @@ func run() error {
 	log.Info("bye")
 	return nil
 }
+
+const landingHTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NevUp Trade Journal - Track 1</title>
+<style>
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; max-width: 720px; margin: 4em auto; padding: 0 1em; color: #222; background: #fafafa; }
+  h1 { font-size: 1.4em; margin-bottom: 0.2em; }
+  .lede { color: #666; margin-top: 0; }
+  code { background: #eef; padding: 1px 5px; border-radius: 3px; }
+  table { border-collapse: collapse; margin: 1em 0; }
+  th, td { text-align: left; padding: 6px 14px 6px 0; border-bottom: 1px solid #ddd; }
+  th { font-weight: 600; }
+  a { color: #0a58ca; }
+  .ok { color: #0a7d2c; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>NevUp Trade Journal - Track 1 (System of Record)</h1>
+<p class="lede">Live backend for the NevUp Hiring Hackathon 2026 submission.</p>
+<p>Source &amp; docs: <a href="https://github.com/parthdagia05/TradingPlatform-Backend">github.com/parthdagia05/TradingPlatform-Backend</a></p>
+
+<h2>Endpoints</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Auth</th></tr>
+  <tr><td>GET</td><td><a href="/health"><code>/health</code></a></td><td>none</td></tr>
+  <tr><td>POST</td><td><code>/trades</code></td><td>JWT</td></tr>
+  <tr><td>GET</td><td><code>/trades/{tradeId}</code></td><td>JWT + tenancy</td></tr>
+  <tr><td>GET</td><td><code>/users/{userId}/metrics?from=&amp;to=&amp;granularity=</code></td><td>JWT + tenancy</td></tr>
+</table>
+
+<p>Auth: HS256 JWT, secret published in the kickoff PDF. <code>jwt.sub</code> must match the <code>userId</code> in the path/body or the request is rejected with <span class="ok">403</span>, never 404.</p>
+<p>Try <a href="/health"><code>/health</code></a> for a quick liveness check.</p>
+</body>
+</html>`
