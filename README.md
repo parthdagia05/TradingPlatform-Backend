@@ -178,6 +178,60 @@ DECISIONS.md    architectural rationale
 * [internal/trades/repo.go](internal/trades/repo.go) — idempotent insert
 * [internal/metrics/](internal/metrics) — the 5 calculators
 
+## Deploying to AWS EC2 (free tier)
+
+The simplest production path: a single t3.micro running `docker compose up`.
+
+### One-time AWS console setup
+
+1. **Launch instance** (Console → EC2 → Launch Instance)
+   - AMI: **Ubuntu Server 24.04 LTS** (free tier eligible)
+   - Type: **t3.micro** (free tier, 1 vCPU / 1 GB RAM) or **t3.small** if budget allows
+   - Storage: **20 GB gp3** (free tier covers 30 GB)
+   - Key pair: create one, save the `.pem` file
+2. **Security group** — add two inbound rules:
+   - SSH (22) from **My IP**
+   - Custom TCP (**8080**) from **0.0.0.0/0** (so the API is publicly reachable)
+3. **Copy** the public IPv4 address from the instance summary.
+
+### On the instance
+
+```bash
+chmod 600 your-key.pem
+ssh -i your-key.pem ubuntu@<public-ip>
+
+# Clone + bootstrap (the script installs Docker, brings up the stack, smoke-tests /health)
+sudo apt-get update -y && sudo apt-get install -y git
+git clone https://github.com/<you>/TradingPlatform-Backend.git
+cd TradingPlatform-Backend
+bash scripts/ec2-bootstrap.sh
+```
+
+The script ends with `Public: http://<ip>:8080/health` once everything is healthy.
+
+### Generate the spec's load-test HTML report
+
+```bash
+# On the EC2 instance — measures pure server perf, no public-internet noise.
+bash scripts/run-loadtest.sh
+```
+
+This:
+- Installs k6 if missing
+- Runs 200 RPS for 60 s against `localhost:8080`
+- Writes `loadtest/results/report.html`, `summary.json`, and `run.log`
+- Prints a one-line verdict (p95 vs the spec's 150 ms budget)
+
+Pull the report back to your laptop and commit it:
+
+```bash
+# From your laptop:
+scp -i your-key.pem ubuntu@<public-ip>:~/TradingPlatform-Backend/loadtest/results/* loadtest/results/
+git add loadtest/results
+git commit -m "loadtest: 200 RPS / 60s run from EC2"
+git push
+```
+
 ## Verify the Docker stack without Docker
 
 Two free options for proving `docker compose up` works on a green machine:
