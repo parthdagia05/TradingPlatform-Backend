@@ -25,13 +25,11 @@ COPY . .
 #   GOOS=linux     → target Linux (the runtime image is Linux).
 #   -ldflags "-s -w" → strip debug symbols and DWARF info; ~30% smaller binary.
 #   -trimpath      → remove absolute paths from the binary (reproducible builds).
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" -trimpath \
-    -o /out/api ./cmd/api
-
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" -trimpath \
-    -o /out/worker ./cmd/worker
+#
+# Both binaries built in one RUN — keeps layers minimal and satisfies hadolint
+# DL3059 (consecutive RUNs are wasteful: each one produces its own image layer).
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -trimpath -o /out/api ./cmd/api \
+ && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -trimpath -o /out/worker ./cmd/worker
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: RUNTIME — minimal image that only contains what we need at runtime
