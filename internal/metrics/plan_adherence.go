@@ -37,7 +37,7 @@ func PlanAdherence(ctx context.Context, pool *pgxpool.Pool, repo *Repo, userID u
 		count++
 	}
 	if count == 0 {
-		return nil // no data yet — nothing to update
+		return nil // no data yet - nothing to update
 	}
 	avg := float64(sum) / float64(count)
 	return repo.SetPlanAdherenceScore(ctx, userID, avg, count)

@@ -36,7 +36,7 @@ func SeedFromCSV(ctx context.Context, pool *pgxpool.Pool, path string, log *slog
 		return fmt.Errorf("count trades: %w", err)
 	}
 	if existing > 0 {
-		log.Info("seed skipped — trades table already populated", "rows", existing)
+		log.Info("seed skipped - trades table already populated", "rows", existing)
 		return nil
 	}
 
@@ -140,12 +140,12 @@ func parseSeedRow(rec []string) ([]any, error) {
 	}
 
 	return []any{
-		rec[0],                  // trade_id (string → UUID by pgx)
+		rec[0],                  // trade_id (string  UUID by pgx)
 		rec[1],                  // user_id
 		emptyToNil(rec[2]),      // trader_name
 		rec[3],                  // session_id
 		rec[4],                  // asset
-		rec[5],                  // asset_class (string → enum)
+		rec[5],                  // asset_class (string  enum)
 		rec[6],                  // direction
 		entryPrice,              // entry_price
 		exitPrice,               // exit_price (nullable)
@@ -163,7 +163,7 @@ func parseSeedRow(rec []string) ([]any, error) {
 	}, nil
 }
 
-// emptyToNil maps "" → nil (= SQL NULL). Anything else passes through unchanged.
+// emptyToNil maps ""  nil (= SQL NULL). Anything else passes through unchanged.
 func emptyToNil(s string) any {
 	if s == "" {
 		return nil

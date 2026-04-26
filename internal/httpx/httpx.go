@@ -2,7 +2,7 @@
 // envelope, the request-scoped context keys, and tiny JSON helpers.
 //
 // We keep these in their own package (not inside middleware/) because both
-// middleware AND handlers need them — and importing handler code from
+// middleware AND handlers need them - and importing handler code from
 // middleware would create a cycle.
 package httpx
 
@@ -15,9 +15,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// ── Context keys ────────────────────────────────────────────────────────────
+// Context keys
 // Using a typed key prevents accidental collisions with other packages that
-// store things in context.Context — best practice from the Go std library.
+// store things in context.Context - best practice from the Go std library.
 
 type ctxKey int
 
@@ -53,7 +53,7 @@ func Logger(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 
-// ── Error response envelope (matches OpenAPI ErrorResponse schema) ──────────
+// Error response envelope (matches OpenAPI ErrorResponse schema)
 
 // ErrorResponse is the JSON body of every 4xx/5xx response. Keeping the shape
 // uniform makes Track 3's frontend simpler and matches the spec's contract.
@@ -65,7 +65,7 @@ type ErrorResponse struct {
 
 // WriteError serializes an error response and writes it with the given status.
 // The traceId is pulled from the context so it matches the structured log line
-// for the same request — exactly what the spec demands.
+// for the same request - exactly what the spec demands.
 func WriteError(w http.ResponseWriter, r *http.Request, status int, code, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

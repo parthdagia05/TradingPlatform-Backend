@@ -1,4 +1,4 @@
-# docker-compose.yml — single source of truth for the entire local/CI stack.
+# docker-compose.yml - single source of truth for the entire local/CI stack.
 #
 # Reviewer experience:
 #   docker compose up --build
@@ -7,23 +7,17 @@
 #
 # Service graph:
 #
-#   ┌──────────┐   ┌─────────┐
-#   │ postgres │   │  redis  │
-#   └────▲─────┘   └────▲────┘
-#        │              │
-#   ┌────┴──────────────┴────┐
-#   │           api           │  ← exposes :8080 to host
-#   └────────────────────────┘
+# -   -#   -| postgres -|   -|  redis  -|
+# -   -#        -|              -|
+#   -|           api           -|  - exposes :8080 to host
 #                              \
-#                               \─ shares Postgres + Redis
-#   ┌────────────────────────┐ /
-#   │         worker          │
-#   └────────────────────────┘
+#                               \- shares Postgres + Redis
+#   -- /
+#   -|         worker          -|
 
 services:
 
-  # ── Postgres 16 ───────────────────────────────────────────────────────────
-  postgres:
+  # Postgres 16  postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: nevup
@@ -40,10 +34,9 @@ services:
       retries: 15
       start_period: 5s
 
-  # ── Redis 7 (used as our message queue via Streams) ───────────────────────
-  redis:
+  # Redis 7 (used as our message queue via Streams)  redis:
     image: redis:7-alpine
-    # AOF (append-only file) gives us durability — entries written to the
+    # AOF (append-only file) gives us durability - entries written to the
     # stream survive `docker compose restart`. Without this, a worker crash
     # would lose un-acked events.
     command: ["redis-server", "--appendonly", "yes"]
@@ -58,8 +51,7 @@ services:
       retries: 15
       start_period: 3s
 
-  # ── API server (HTTP) ─────────────────────────────────────────────────────
-  api:
+  # API server (HTTP)  api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -67,7 +59,7 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      # NOTE: host = "postgres" / "redis" — the docker-compose service names,
+      # NOTE: host = "postgres" / "redis" - the docker-compose service names,
       # NOT localhost. localhost inside the container would mean the container
       # itself, which has no DB or Redis listening.
       DATABASE_URL: "postgres://nevup:nevup@postgres:5432/nevup?sslmode=disable"
@@ -87,9 +79,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Async metrics worker ──────────────────────────────────────────────────
-  # Same image as `api`, different entrypoint. This is the cmd/<name> pattern
-  # paying off — one Docker build, two roles.
+  # Async metrics worker  # Same image as `api`, different entrypoint. This is the cmd/<name> pattern
+  # paying off - one Docker build, two roles.
   worker:
     build:
       context: .
@@ -115,7 +106,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-# ── Named volumes (persist across `docker compose down`) ────────────────────
-volumes:
+# Named volumes (persist across `docker compose down`)volumes:
   postgres_data:
   redis_data:

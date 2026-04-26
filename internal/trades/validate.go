@@ -8,12 +8,12 @@ import (
 )
 
 // ErrValidation is wrapped so handlers can distinguish "client sent garbage"
-// (→ 400) from "server has a bug" (→ 500).
+// ( 400) from "server has a bug" ( 500).
 var ErrValidation = errors.New("validation failed")
 
 // validate enforces every constraint the OpenAPI schema declares. We do this
 // by hand instead of pulling validator/v10 here because the rules are short
-// and explicit — easier to read than struct tags.
+// and explicit - easier to read than struct tags.
 func (in *TradeInput) validate() error {
 	if in.TradeID == uuid.Nil {
 		return fmt.Errorf("%w: tradeId required", ErrValidation)

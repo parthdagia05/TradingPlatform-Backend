@@ -25,7 +25,7 @@ func NewHandler(repo *Repo, p *queue.Producer) *Handler {
 }
 
 // Mount wires the routes onto the router. The auth middleware is applied
-// at the parent router level — here we just declare paths.
+// at the parent router level - here we just declare paths.
 func (h *Handler) Mount(r chi.Router) {
 	r.Post("/trades", h.create)
 	r.Get("/trades/{tradeId}", h.get)
@@ -76,7 +76,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 
 	// Fire-and-forget the metrics events on a fresh, time-bounded context so
 	// a slow Redis can't drag out the request past our p95 budget. Spec says
-	// the async pipeline must not block the write path — this enforces it.
+	// the async pipeline must not block the write path - this enforces it.
 	if h.producer != nil && inserted {
 		go func(ev queue.Event) {
 			pubCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -88,7 +88,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		}(eventFor(t))
 	}
 
-	// 200 in both branches — idempotent contract.
+	// 200 in both branches - idempotent contract.
 	httpx.WriteJSON(w, http.StatusOK, t)
 }
 
@@ -96,7 +96,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 //   - 200 with the trade
 //   - 403 if the trade belongs to someone else
 //   - 404 only if the id doesn't exist (and the caller is also not blocked
-//     on tenancy — we check tenancy first to never leak existence)
+//     on tenancy - we check tenancy first to never leak existence)
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	log := httpx.Logger(r.Context())
 
@@ -122,7 +122,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Tenancy check AFTER load: returning 403 is correct per spec
-	// ("Any mismatch must return HTTP 403 — never 404.").
+	// ("Any mismatch must return HTTP 403 - never 404.").
 	if t.UserID != tokenUID {
 		httpx.WriteError(w, r, http.StatusForbidden,
 			"FORBIDDEN", "Cross-tenant access denied.")

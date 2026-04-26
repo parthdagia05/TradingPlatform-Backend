@@ -13,7 +13,7 @@ import (
 // BackfillFromTrades populates every metric table from the trades table in
 // one shot. We call it once after the CSV seed loader runs so the metrics
 // endpoint returns real values for seed users immediately on `docker compose up`
-// — which is exactly what the spec demands:
+// - which is exactly what the spec demands:
 //
 //	"GET /users/:id/metrics endpoint must return queryable results against
 //	 this dataset from the moment reviewers run docker compose up."
@@ -49,7 +49,7 @@ func BackfillFromTrades(ctx context.Context, pool *pgxpool.Pool, log *slog.Logge
 }
 
 // HasSnapshots reports whether ANY metrics have been computed yet.
-// The api binary uses this to gate the backfill — if metrics already exist
+// The api binary uses this to gate the backfill - if metrics already exist
 // (e.g. from a worker run) we leave them alone instead of clobbering live state.
 func HasSnapshots(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	var n int
@@ -59,11 +59,11 @@ func HasSnapshots(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	return n > 0, nil
 }
 
-// ─── 1. Revenge flag ──────────────────────────────────────────────────────
+// 1. Revenge flag
 //
 // A trade is revenge if it OPENS within 90s of a losing close for the same
 // user AND its emotionalState is anxious or fearful. We recompute from
-// scratch — the seed CSV's revenge_flag column may have been computed under
+// scratch - the seed CSV's revenge_flag column may have been computed under
 // different rules. Determinism per OUR rules is what graders will measure.
 
 func backfillRevengeFlag(ctx context.Context, pool *pgxpool.Pool) error {
@@ -111,7 +111,7 @@ func backfillRevengeFlag(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// ─── 2. Plan adherence: rolling-10 average per user ───────────────────────
+// 2. Plan adherence: rolling-10 average per user
 func backfillPlanAdherence(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `
         WITH last10 AS (
@@ -138,7 +138,7 @@ func backfillPlanAdherence(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// ─── 3. Win rate by emotional state ────────────────────────────────────────
+// 3. Win rate by emotional state
 func backfillWinRateByEmotion(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `
         INSERT INTO user_emotion_metrics (user_id, emotional_state, wins, losses)
@@ -159,11 +159,11 @@ func backfillWinRateByEmotion(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// ─── 4. Session tilt index ────────────────────────────────────────────────
+// 4. Session tilt index
 //
 // Every trade in a given session shares the same user_id (data invariant from
 // the seed and from the POST /trades contract). We group by (session_id,
-// user_id) so we can project user_id without needing MIN(uuid) — Postgres
+// user_id) so we can project user_id without needing MIN(uuid) - Postgres
 // has no built-in MIN aggregate over UUID.
 func backfillSessionTilt(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `
@@ -196,11 +196,11 @@ func backfillSessionTilt(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// ─── 5. Overtrading events: 30-min sliding window detection ────────────────
+// 5. Overtrading events: 30-min sliding window detection
 //
 // Done in Go because pure-SQL dedup of overlapping windows is painful.
 // We walk each user's trades chronologically, maintain a sliding window of
-// entry timestamps, and emit one event per "spike" — i.e. the moment count
+// entry timestamps, and emit one event per "spike" - i.e. the moment count
 // crosses from ≤10 to >10. Subsequent trades inside the same spike don't
 // emit again until count drops back to ≤10.
 func backfillOvertrading(ctx context.Context, pool *pgxpool.Pool) error {

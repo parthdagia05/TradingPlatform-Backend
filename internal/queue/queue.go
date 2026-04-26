@@ -1,15 +1,15 @@
 // Package queue is our async pipeline boundary. We use Redis Streams as the
-// transport — the spec accepts Redis Streams as a "real" message queue
+// transport - the spec accepts Redis Streams as a "real" message queue
 // (Kafka / RabbitMQ / equivalent). Streams give us: durable append-only log,
 // consumer-group fan-out, at-least-once delivery, and millisecond latency.
 //
 // Two kinds of events flow through this stream:
 //
-//   - "trade.closed"     — the worker computes plan-adherence, revenge-flag,
+//   - "trade.closed"     - the worker computes plan-adherence, revenge-flag,
 //                          session-tilt, win-rate.
-//   - "trade.opened"     — the worker checks the 30-min sliding window for
+//   - "trade.opened"     - the worker checks the 30-min sliding window for
 //                          overtrading and emits "overtrading.detected" if so.
-//   - "overtrading.detected" — same stream; recorded in the DB by the worker.
+//   - "overtrading.detected" - same stream; recorded in the DB by the worker.
 //
 // One stream, multiple event types, distinguished by the "type" field. This
 // is simpler than multiple streams and lets us preserve event ordering per user.
@@ -32,7 +32,7 @@ const (
 	EventOvertradingDetected EventType = "overtrading.detected"
 )
 
-// Event is what producers publish and consumers receive. Keep it small —
+// Event is what producers publish and consumers receive. Keep it small -
 // Redis Streams is not for big payloads. The full trade lives in Postgres;
 // the event just points at it.
 type Event struct {
@@ -59,7 +59,7 @@ func NewClient(redisURL string) (*redis.Client, error) {
 }
 
 // EnsureGroup creates the consumer group if it doesn't exist. Safe to call
-// repeatedly — a "BUSYGROUP" error means the group is already there, fine.
+// repeatedly - a "BUSYGROUP" error means the group is already there, fine.
 func EnsureGroup(ctx context.Context, rdb *redis.Client, stream, group string) error {
 	// MKSTREAM = create the stream too if it's missing (otherwise XGROUP fails).
 	// "$" = start consuming from the moment of group creation, ignoring history.
@@ -67,7 +67,7 @@ func EnsureGroup(ctx context.Context, rdb *redis.Client, stream, group string) e
 	if err == nil {
 		return nil
 	}
-	// "BUSYGROUP" means the group already exists — that's the desired state.
+	// "BUSYGROUP" means the group already exists - that's the desired state.
 	if err.Error() == "BUSYGROUP Consumer Group name already exists" {
 		return nil
 	}

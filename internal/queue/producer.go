@@ -8,9 +8,9 @@ import (
 )
 
 // Producer publishes events to the stream. The HTTP write path uses one of
-// these — but it MUST NOT block the request: we use a 200ms timeout and log
+// these - but it MUST NOT block the request: we use a 200ms timeout and log
 // (don't fail) if Redis is degraded. A trade write succeeds in the DB even
-// if the metrics event got dropped — those are eventually-consistent.
+// if the metrics event got dropped - those are eventually-consistent.
 type Producer struct {
 	rdb    *redis.Client
 	stream string

@@ -10,7 +10,7 @@ import (
 )
 
 // Message wraps a single stream entry pulled by a consumer.
-// Ack() must be called once the message has been processed successfully —
+// Ack() must be called once the message has been processed successfully -
 // unacked messages are redelivered to another consumer after the visibility
 // timeout (5s here), giving us at-least-once delivery semantics.
 type Message struct {
@@ -62,7 +62,7 @@ func (c *Consumer) QueueLag(ctx context.Context) (int64, error) {
 //
 // The caller (Worker.Run) is expected to sleep briefly on empty results when
 // using non-blocking mode, otherwise it would spin. Non-blocking mode is the
-// safe default — it works against real Redis, miniredis, and behind any
+// safe default - it works against real Redis, miniredis, and behind any
 // proxy/load-balancer that might cap idle connection time.
 func (c *Consumer) Read(ctx context.Context, count int64, block time.Duration) ([]Message, error) {
 	res, err := c.rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
@@ -73,7 +73,7 @@ func (c *Consumer) Read(ctx context.Context, count int64, block time.Duration) (
 		Block:    block,
 	}).Result()
 	if err != nil {
-		// redis.Nil = no messages within block window. Normal — return empty.
+		// redis.Nil = no messages within block window. Normal - return empty.
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
@@ -85,7 +85,7 @@ func (c *Consumer) Read(ctx context.Context, count int64, block time.Duration) (
 		for _, m := range s.Messages {
 			ev, err := decodeValues(m.Values)
 			if err != nil {
-				// Bad message — ack so it doesn't loop forever, log to drop floor.
+				// Bad message - ack so it doesn't loop forever, log to drop floor.
 				_ = c.rdb.XAck(ctx, c.stream, c.group, m.ID).Err()
 				continue
 			}

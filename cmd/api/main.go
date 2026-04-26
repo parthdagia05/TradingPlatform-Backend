@@ -1,13 +1,8 @@
-// Command api is the HTTP server binary.
+// Command api is the HTTP server.
 //
-// Boot order:
-//  1. Load config (fail fast on missing/invalid vars).
-//  2. Build logger.
-//  3. Open Postgres pool, run migrations, optionally seed the CSV.
-//  4. Open Redis client, ensure stream consumer group exists.
-//  5. Wire handlers (trades, metrics, health) and middleware
-//     (trace → log → recoverer → auth → tenancy).
-//  6. Listen on cfg.Port with graceful shutdown on SIGINT/SIGTERM.
+// Boots in this order: load config, build logger, open Postgres + run
+// migrations + (optionally) seed and backfill, open Redis + ensure consumer
+// group, wire handlers and middleware, listen with graceful shutdown.
 package main
 
 import (
@@ -27,8 +22,8 @@ import (
 	"github.com/nevup/trade-journal/internal/db"
 	"github.com/nevup/trade-journal/internal/health"
 	"github.com/nevup/trade-journal/internal/logger"
-	mw "github.com/nevup/trade-journal/internal/middleware"
 	"github.com/nevup/trade-journal/internal/metrics"
+	mw "github.com/nevup/trade-journal/internal/middleware"
 	"github.com/nevup/trade-journal/internal/queue"
 	"github.com/nevup/trade-journal/internal/trades"
 )
@@ -41,18 +36,17 @@ func main() {
 }
 
 func run() error {
-	// ── 1. Config ────────────────────────────────────────────────────────────
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// ── 2. Logger ────────────────────────────────────────────────────────────
 	log := logger.New(cfg.LogLevel).With("component", "api")
 	log.Info("starting api",
 		"port", cfg.Port, "logLevel", cfg.LogLevel, "seedOnStart", cfg.SeedOnStart)
 
-	// ── 3. Database ──────────────────────────────────────────────────────────
+	// boot work runs on a separate, time-bounded context so a misconfigured
+	// dependency can't keep the container hanging forever
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer bootCancel()
 
@@ -69,9 +63,8 @@ func run() error {
 		if err := db.SeedFromCSV(bootCtx, pool, cfg.SeedFilePath, log); err != nil {
 			return fmt.Errorf("seed: %w", err)
 		}
-		// Backfill metric tables once, only if they're empty. The worker
-		// owns metric updates for live trades — this just ensures seeded
-		// users have queryable metrics on first boot.
+		// only backfill metrics if the tables are empty; once the worker has
+		// touched them we leave live state alone
 		hasSnap, err := metrics.HasSnapshots(bootCtx, pool)
 		if err != nil {
 			return fmt.Errorf("check snapshots: %w", err)
@@ -83,7 +76,6 @@ func run() error {
 		}
 	}
 
-	// ── 4. Redis (queue) ─────────────────────────────────────────────────────
 	rdb, err := queue.NewClient(cfg.RedisURL)
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
@@ -94,43 +86,34 @@ func run() error {
 		return fmt.Errorf("ensure group: %w", err)
 	}
 	producer := queue.NewProducer(rdb, cfg.StreamName)
-
-	// /health uses a consumer-side handle to read pending count.
+	// /health uses its own consumer handle to read XPENDING
 	healthConsumer := queue.NewConsumer(rdb, cfg.StreamName, cfg.ConsumerGroup,
 		cfg.ConsumerName+"-health")
 
-	// ── 5. Repositories + handlers ───────────────────────────────────────────
 	tradeRepo := trades.NewRepo(pool)
 	metricRepo := metrics.NewRepo(pool)
+	verifier := auth.NewVerifier(cfg.JWTSecret)
 
 	tradeHandler := trades.NewHandler(tradeRepo, producer)
 	metricHandler := metrics.NewHandler(metricRepo)
 	healthHandler := health.NewHandler(pool, healthConsumer)
 
-	verifier := auth.NewVerifier(cfg.JWTSecret)
-
-	// ── 6. Router ────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
-
-	// Cross-cutting middleware order matters:
-	//   trace → logger → recoverer
-	// (trace before logger so logs carry traceId; recoverer last so panics
-	// inside earlier middleware also get caught).
+	// trace before logger so log lines carry traceId; recoverer last so it
+	// catches panics from anything earlier in the chain
 	r.Use(mw.Trace)
 	r.Use(mw.Logger(log))
 	r.Use(mw.Recoverer(log))
 
-	// /health is unauthenticated per spec.
 	healthHandler.Mount(r)
 
-	// Authenticated routes.
 	r.Group(func(r chi.Router) {
 		r.Use(mw.Authenticator(verifier))
-
-		// /trades — auth-only; per-body cross-tenant check inside handler.
+		// /trades has no userId in the path; the handler does the body-level
+		// tenancy check itself
 		tradeHandler.Mount(r)
 
-		// /users/{userId}/* — auth + path-tenancy match.
+		// /users/{userId}/* gets the path-level tenancy guard
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireUserMatch(func(req *http.Request) string {
 				return chi.URLParam(req, "userId")
@@ -139,7 +122,6 @@ func run() error {
 		})
 	})
 
-	// ── 7. HTTP server ───────────────────────────────────────────────────────
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           r,

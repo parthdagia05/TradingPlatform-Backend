@@ -3,9 +3,7 @@
 -- These tables are populated EXCLUSIVELY by the worker (see internal/metrics/*).
 -- The read API reads from here for fast, indexed lookups instead of recomputing.
 
--- ─────────────────────────────────────────────────────────────────────────────
--- user_metrics — one row per user, aggregate / snapshot state
--- ─────────────────────────────────────────────────────────────────────────────
+-- user_metrics - one row per user, aggregate / snapshot state
 CREATE TABLE user_metrics (
     user_id                     UUID            PRIMARY KEY,
     -- Plan Adherence Score: rolling 10-trade average. Recomputed on each close.
@@ -17,9 +15,7 @@ CREATE TABLE user_metrics (
     updated_at                  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- user_emotion_metrics — wins/losses bucketed by (user, emotional_state)
--- ─────────────────────────────────────────────────────────────────────────────
+-- user_emotion_metrics - wins/losses bucketed by (user, emotional_state)
 CREATE TABLE user_emotion_metrics (
     user_id          UUID                NOT NULL,
     emotional_state  emotional_state     NOT NULL,
@@ -29,9 +25,7 @@ CREATE TABLE user_emotion_metrics (
     PRIMARY KEY (user_id, emotional_state)
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- session_metrics — tilt index per session
--- ─────────────────────────────────────────────────────────────────────────────
+-- session_metrics - tilt index per session
 CREATE TABLE session_metrics (
     session_id              UUID            PRIMARY KEY,
     user_id                 UUID            NOT NULL,
@@ -44,9 +38,7 @@ CREATE TABLE session_metrics (
 );
 CREATE INDEX idx_session_metrics_user ON session_metrics (user_id, updated_at DESC);
 
--- ─────────────────────────────────────────────────────────────────────────────
--- overtrading_events — append-only log of detected overtrading windows
--- ─────────────────────────────────────────────────────────────────────────────
+-- overtrading_events - append-only log of detected overtrading windows
 CREATE TABLE overtrading_events (
     event_id        UUID            PRIMARY KEY,
     user_id         UUID            NOT NULL,

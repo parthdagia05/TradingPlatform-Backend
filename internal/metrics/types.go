@@ -1,10 +1,10 @@
 // Package metrics implements the 5 behavioural metrics from the spec:
 //
-//  1. Plan Adherence Score   — rolling 10-trade avg of planAdherence
-//  2. Revenge Trade Flag     — opens within 90s of a losing close + anxious/fearful
-//  3. Session Tilt Index     — loss-following / total trades in the session
-//  4. Win Rate by Emotion    — running per-emotion win/loss counts
-//  5. Overtrading Detector   — > 10 trades in any 30-minute sliding window
+//  1. Plan Adherence Score   - rolling 10-trade avg of planAdherence
+//  2. Revenge Trade Flag     - opens within 90s of a losing close + anxious/fearful
+//  3. Session Tilt Index     - loss-following / total trades in the session
+//  4. Win Rate by Emotion    - running per-emotion win/loss counts
+//  5. Overtrading Detector   - > 10 trades in any 30-minute sliding window
 //
 // Each calculator is invoked by the async worker on the relevant event
 // (trade.opened or trade.closed) and persists its output via repo.go.

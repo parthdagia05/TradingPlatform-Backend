@@ -3,13 +3,11 @@
 -- Naming convention: NNNN_<description>.up.sql / .down.sql
 -- The numeric prefix is the migration version. Lexical sort = apply order.
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- Enum types
 -- Using Postgres native ENUMs (vs TEXT + CHECK) for two reasons:
 --   1. Storage: enums are stored as 4-byte integers, not the string itself.
 --   2. Type safety: an invalid enum value fails at INSERT time with a clean error.
 -- Trade-off: adding a value later requires `ALTER TYPE ... ADD VALUE`. Acceptable.
--- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TYPE asset_class      AS ENUM ('equity', 'crypto', 'forex');
 CREATE TYPE trade_direction  AS ENUM ('long', 'short');
@@ -17,10 +15,8 @@ CREATE TYPE trade_status     AS ENUM ('open', 'closed', 'cancelled');
 CREATE TYPE trade_outcome    AS ENUM ('win', 'loss');
 CREATE TYPE emotional_state  AS ENUM ('calm', 'anxious', 'greedy', 'fearful', 'neutral');
 
--- ─────────────────────────────────────────────────────────────────────────────
--- trades — the system of record
+-- trades - the system of record
 -- One row per trade. Idempotent on trade_id (the natural key from the client).
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE trades (
     trade_id                    UUID            PRIMARY KEY,
     user_id                     UUID            NOT NULL,
@@ -53,9 +49,7 @@ CREATE TABLE trades (
     )
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Indexes — each one justified by a specific query in DECISIONS.md
--- ─────────────────────────────────────────────────────────────────────────────
+-- Indexes - each one justified by a specific query in DECISIONS.md
 
 -- Most user queries filter by user_id and a time range over entry_at.
 -- DESC order matches the typical "show me recent trades" access pattern.
@@ -79,13 +73,11 @@ CREATE INDEX idx_trades_user_emotion_outcome
     ON trades (user_id, emotional_state, outcome)
     WHERE status = 'closed';
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- updated_at trigger
 -- Why a DB trigger instead of doing this in Go?
---   1. Centralizes the rule — every UPDATE bumps it, regardless of caller.
+--   1. Centralizes the rule - every UPDATE bumps it, regardless of caller.
 --   2. The async worker also updates rows (revenge_flag, etc.) and must not
---      forget to set updated_at — the DB enforces it for us.
--- ─────────────────────────────────────────────────────────────────────────────
+--      forget to set updated_at - the DB enforces it for us.
 CREATE OR REPLACE FUNCTION trg_trades_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

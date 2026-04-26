@@ -26,11 +26,11 @@ func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 // Insert is the idempotent write path.
 //
 // Per spec: "POST /trades must be idempotent on tradeId. Duplicate submissions
-// must return HTTP 200 with the existing record — not 500 or 409."
+// must return HTTP 200 with the existing record - not 500 or 409."
 //
 // We use ON CONFLICT (trade_id) DO NOTHING + RETURNING. If the row was newly
 // inserted, RETURNING gives us the row. If it already existed, RETURNING is
-// empty and we follow up with a SELECT — same return shape either way.
+// empty and we follow up with a SELECT - same return shape either way.
 //
 // `inserted` reports which path we took (true = new row, false = existed).
 // The handler doesn't care; the test suite asserts on it for the idempotency
@@ -70,7 +70,7 @@ func (r *Repo) Insert(ctx context.Context, in *TradeInput) (t *Trade, inserted b
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, fmt.Errorf("insert: %w", err)
 		}
-		// Row already existed — fetch it and return inserted=false.
+		// Row already existed - fetch it and return inserted=false.
 		got, err := r.Get(ctx, in.TradeID)
 		if err != nil {
 			return nil, false, fmt.Errorf("idempotent fetch: %w", err)
@@ -96,7 +96,7 @@ func (r *Repo) Get(ctx context.Context, id uuid.UUID) (*Trade, error) {
 }
 
 // SetRevengeFlag updates the revenge_flag column from the async worker.
-// We update directly here (vs returning the row) — the worker doesn't need it.
+// We update directly here (vs returning the row) - the worker doesn't need it.
 func (r *Repo) SetRevengeFlag(ctx context.Context, tradeID uuid.UUID, flag bool) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE trades SET revenge_flag = $1 WHERE trade_id = $2`, flag, tradeID)
@@ -106,7 +106,7 @@ func (r *Repo) SetRevengeFlag(ctx context.Context, tradeID uuid.UUID, flag bool)
 	return nil
 }
 
-// ── internal helpers ────────────────────────────────────────────────────────
+// internal helpers
 
 // selectColumns is the canonical column list shared by Insert (RETURNING) and
 // Get (SELECT). Keeping it as one constant guarantees the scan helper always
@@ -164,7 +164,7 @@ func derive(in *TradeInput) (placeholder *Trade, pnl any, outcome any) {
 	}
 	p := delta * in.Quantity
 
-	// Round to 8 decimal places to fit NUMERIC(18, 8). Float→numeric works
+	// Round to 8 decimal places to fit NUMERIC(18, 8). Floatnumeric works
 	// fine for the value range we care about (no extreme precision needed).
 	p = round8(p)
 

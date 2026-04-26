@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: NevUp Trade Journal API — Track 1 (System of Record)
+  title: NevUp Trade Journal API - Track 1 (System of Record)
   description: |
     The endpoints implemented by this Track 1 backend. Faithful subset of the
-    shared `nevup_openapi.yaml` contract from the hackathon kickoff packet —
+    shared `nevup_openapi.yaml` contract from the hackathon kickoff packet -
     frontend (Track 3) endpoints are intentionally omitted because Track 1 does
     not own them.
   version: "1.0.0"
@@ -34,7 +34,7 @@ paths:
             schema: { $ref: '#/components/schemas/TradeInput' }
       responses:
         '200':
-          description: Trade created (or already exists — idempotent)
+          description: Trade created (or already exists - idempotent)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Trade' }
@@ -200,7 +200,7 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Forbidden:
       description: |
-        Cross-tenant access denied. Returns 403, never 404 — per the hackathon
+        Cross-tenant access denied. Returns 403, never 404 - per the hackathon
         spec's row-level tenancy rule.
       content:
         application/json:

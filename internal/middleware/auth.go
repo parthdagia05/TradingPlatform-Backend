@@ -13,8 +13,8 @@ import (
 // Authenticator extracts the Bearer JWT, verifies it, and stores the userId
 // in the request context so downstream handlers + middleware can rely on it.
 //
-//   - Missing header / malformed token / bad signature / expired → 401
-//   - Valid token → context populated, request continues
+//   - Missing header / malformed token / bad signature / expired  401
+//   - Valid token  context populated, request continues
 //
 // The 403 cross-tenant check is enforced separately in RequireUserMatch
 // because not every authed endpoint has a userId path parameter (e.g. /trades).
@@ -55,9 +55,9 @@ func Authenticator(verifier *auth.Verifier) func(http.Handler) http.Handler {
 // RequireUserMatch enforces the row-level tenancy rule from the spec:
 //
 //	"The sub claim (userId) in the JWT must exactly match the userId in
-//	 the data being accessed. Any mismatch must return HTTP 403 — never 404."
+//	 the data being accessed. Any mismatch must return HTTP 403 - never 404."
 //
-// It reads {userId} from the URL path (chi.URLParam — but we receive it via
+// It reads {userId} from the URL path (chi.URLParam - but we receive it via
 // the second arg to keep this package framework-agnostic).
 func RequireUserMatch(pathUserID func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -72,7 +72,7 @@ func RequireUserMatch(pathUserID func(*http.Request) string) func(http.Handler) 
 			pathStr := pathUserID(r)
 			pathUID, err := uuid.Parse(pathStr)
 			if err != nil {
-				// Malformed path UUID is a 400, not 403 — the request is
+				// Malformed path UUID is a 400, not 403 - the request is
 				// nonsensical regardless of who's asking.
 				httpx.WriteError(w, r, http.StatusBadRequest,
 					"BAD_REQUEST", "userId path parameter must be a UUID.")

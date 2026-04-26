@@ -12,7 +12,7 @@ import (
 // Overtrading: > 10 trades opened in any 30-minute sliding window per user.
 //
 // Run on every trade.opened event. The check is anchored at the current
-// trade's entry_at — count opens in the [entry_at - 30m, entry_at] window.
+// trade's entry_at - count opens in the [entry_at - 30m, entry_at] window.
 // If count > 10, record an overtrading_event and bump the counter.
 //
 // The same emit-once-per-incident behaviour matters: we don't want to emit

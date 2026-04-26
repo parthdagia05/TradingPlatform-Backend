@@ -11,7 +11,7 @@
 //   - sub is a valid UUIDv4
 //   - role is "trader"
 //
-// Anything else (missing claim, bad signature, expired) → ErrInvalidToken.
+// Anything else (missing claim, bad signature, expired)  ErrInvalidToken.
 package auth
 
 import (
@@ -41,16 +41,16 @@ type Verifier struct {
 }
 
 // NewVerifier returns a Verifier bound to the given HMAC secret.
-// Panics on empty secret — that's a configuration bug, not a runtime issue.
+// Panics on empty secret - that's a configuration bug, not a runtime issue.
 func NewVerifier(secret []byte) *Verifier {
 	if len(secret) == 0 {
-		panic("auth: empty JWT secret — refusing to start")
+		panic("auth: empty JWT secret - refusing to start")
 	}
 	return &Verifier{secret: secret}
 }
 
 // Parse verifies the token and returns its claims. Any failure mode returns
-// ErrInvalidToken — we deliberately do not differentiate "expired" vs "bad sig"
+// ErrInvalidToken - we deliberately do not differentiate "expired" vs "bad sig"
 // in the public error so we don't leak validation hints to attackers.
 func (v *Verifier) Parse(tokenStr string) (*Claims, error) {
 	tok, err := jwt.Parse(tokenStr,

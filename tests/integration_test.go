@@ -89,7 +89,7 @@ func doJSON(t *testing.T, method, path, token string, body any, out any) int {
 	return res.StatusCode
 }
 
-// ── TEST: POST /trades is idempotent on tradeId ────────────────────────────
+// TEST: POST /trades is idempotent on tradeId
 //
 // Submit the same trade twice. Both calls must return 200, and the response
 // body must be the same record (same tradeId, same createdAt).
@@ -121,7 +121,7 @@ func TestIdempotentTradeWrite(t *testing.T) {
 		"createdAt should be the same on idempotent re-submit (proves no new row)")
 }
 
-// ── TEST: cross-tenant requests return 403, never 404 ──────────────────────
+// TEST: cross-tenant requests return 403, never 404
 //
 // User A authenticates and tries to read User B's metrics. Must be 403.
 func TestCrossTenantReturns403(t *testing.T) {
@@ -138,7 +138,7 @@ func TestCrossTenantReturns403(t *testing.T) {
 		"cross-tenant must be 403 (got %d)", status)
 }
 
-// ── TEST: missing Authorization header → 401 ───────────────────────────────
+// TEST: missing Authorization header  401
 func TestUnauthenticatedReturns401(t *testing.T) {
 	skipIfShort(t)
 	url := fmt.Sprintf("/users/%s/metrics?from=%s&to=%s&granularity=daily",
@@ -147,7 +147,7 @@ func TestUnauthenticatedReturns401(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, doJSON(t, "GET", url, "", nil, nil))
 }
 
-// ── TEST: GET /health returns 200 + reports DB+queue state ─────────────────
+// TEST: GET /health returns 200 + reports DB+queue state
 func TestHealthReturnsState(t *testing.T) {
 	skipIfShort(t)
 	var body map[string]any

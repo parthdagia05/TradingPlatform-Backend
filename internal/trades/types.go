@@ -50,7 +50,7 @@ const (
 
 // TradeInput is the POST /trades body. Mirrors the OpenAPI TradeInput schema.
 // Pointers are used for nullable fields so the JSON decoder distinguishes
-// "absent" (nil) from "explicit null" (still nil with omitempty) — pgx then
+// "absent" (nil) from "explicit null" (still nil with omitempty) - pgx then
 // writes SQL NULL.
 type TradeInput struct {
 	TradeID         uuid.UUID       `json:"tradeId"`
@@ -70,7 +70,7 @@ type TradeInput struct {
 	EntryRationale  *string         `json:"entryRationale,omitempty"`
 }
 
-// Trade is the response shape — input fields plus computed/server-side ones.
+// Trade is the response shape - input fields plus computed/server-side ones.
 type Trade struct {
 	TradeInput
 	Outcome     *Outcome  `json:"outcome,omitempty"`

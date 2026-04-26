@@ -3,7 +3,7 @@
 //
 // We use pgx/v5's native pool (pgxpool), not database/sql. pgx is faster,
 // supports COPY FROM (used by the seeder for bulk insert), and has better
-// handling of NUMERIC, UUID, TIMESTAMPTZ — the exact types our schema uses.
+// handling of NUMERIC, UUID, TIMESTAMPTZ - the exact types our schema uses.
 package db
 
 import (
@@ -31,7 +31,7 @@ import (
 //                  the TCP+TLS handshake cost on a cold pool.
 //
 // The 10s connect timeout means we fail fast on a misconfigured DATABASE_URL
-// instead of hanging forever — important for the docker-compose health flow.
+// instead of hanging forever - important for the docker-compose health flow.
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -64,7 +64,7 @@ func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 // RunMigrations applies every NNNN_*.up.sql in dir that hasn't been applied yet,
 // each one inside a transaction, recording the version in schema_migrations.
 //
-// This is a deliberately tiny migration runner — ~50 lines vs pulling in
+// This is a deliberately tiny migration runner - ~50 lines vs pulling in
 // golang-migrate as a dep. For a single-digit number of migrations it's plenty.
 // If migrations grow past ~20, switch to golang-migrate.
 func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string, log *slog.Logger) error {
@@ -92,7 +92,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string, log *slo
 	sort.Strings(files)
 
 	// 3. Apply each file in its own transaction. If one fails, the partial
-	// state rolls back automatically — no half-applied schema.
+	// state rolls back automatically - no half-applied schema.
 	for _, file := range files {
 		version := strings.TrimSuffix(filepath.Base(file), ".up.sql")
 

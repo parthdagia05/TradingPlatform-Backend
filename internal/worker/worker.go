@@ -1,6 +1,6 @@
 // Package worker is the async pipeline orchestrator. It pulls events off the
 // Redis stream and dispatches each to the right metric calculators. The five
-// hackathon-required metrics live in internal/metrics — this package only wires.
+// hackathon-required metrics live in internal/metrics - this package only wires.
 package worker
 
 import (
@@ -39,10 +39,10 @@ func New(log *slog.Logger, pool *pgxpool.Pool, c *queue.Consumer, p *queue.Produ
 // Run loops until ctx cancels. Each iteration: poll for messages, process,
 // ack. On empty results we sleep briefly to avoid burning a core.
 //
-// IMPORTANT — go-redis Block semantics:
-//   Block <  0   → no BLOCK keyword sent → returns immediately (true non-block)
-//   Block == 0   → BLOCK 0 sent → blocks **forever** (Redis protocol)
-//   Block >  0   → BLOCK <ms> sent → blocks up to that many milliseconds
+// IMPORTANT - go-redis Block semantics:
+//   Block <  0    no BLOCK keyword sent  returns immediately (true non-block)
+//   Block == 0    BLOCK 0 sent  blocks **forever** (Redis protocol)
+//   Block >  0    BLOCK <ms> sent  blocks up to that many milliseconds
 //
 // We pass a negative Block so the consumer returns immediately on an empty
 // stream. This works on both real Redis and miniredis (whose stream BLOCK
@@ -91,7 +91,7 @@ func (w *Worker) Run(ctx context.Context) error {
 }
 
 // handle processes a single message: dispatch to calculators, then ack.
-// Errors are logged but never returned — at-least-once delivery handles retries.
+// Errors are logged but never returned - at-least-once delivery handles retries.
 //
 // We parse IDs lazily per event type because not every event populates all
 // three (overtrading.detected has only userId + occurredAt).
@@ -139,7 +139,7 @@ func (w *Worker) handle(ctx context.Context, m queue.Message) {
 	case queue.EventOvertradingDetected:
 		// Emitted by ourselves on threshold crossing. Track 2's AI engine and
 		// any downstream consumers will pick this up. Track 1 has nothing to
-		// do — the metric is already persisted in user_metrics + overtrading_events.
+		// do - the metric is already persisted in user_metrics + overtrading_events.
 
 	default:
 		log.Warn("unknown event type, dropping")

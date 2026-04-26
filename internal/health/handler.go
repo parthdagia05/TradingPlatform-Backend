@@ -20,7 +20,7 @@ type Handler struct {
 }
 
 // NewHandler accepts a consumer so we can report queue lag. It's allowed to be
-// nil — for the api binary we may not own a consumer.
+// nil - for the api binary we may not own a consumer.
 func NewHandler(pool *pgxpool.Pool, consumer *queue.Consumer) *Handler {
 	return &Handler{pool: pool, consumer: consumer}
 }
@@ -30,7 +30,7 @@ func (h *Handler) Mount(r chi.Router) {
 }
 
 // Response matches the OpenAPI HealthResponse schema. queueLag is in ms in
-// the spec — we report it as a count of pending messages because that's
+// the spec - we report it as a count of pending messages because that's
 // the actionable signal. Both interpretations satisfy "expose queue lag".
 type Response struct {
 	Status       string    `json:"status"`
@@ -48,7 +48,7 @@ func (h *Handler) check(w http.ResponseWriter, r *http.Request) {
 	}
 	status := http.StatusOK
 
-	// DB liveness — bounded ping, never block /health past a tight budget.
+	// DB liveness - bounded ping, never block /health past a tight budget.
 	pingCtx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
 	defer cancel()
 	if err := h.pool.Ping(pingCtx); err != nil {

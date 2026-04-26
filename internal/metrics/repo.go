@@ -19,7 +19,7 @@ type Repo struct {
 
 func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 
-// ─── Reads ────────────────────────────────────────────────────────────────
+// Reads
 
 // LoadSnapshot fetches the latest user_metrics row + emotion stats. Returns
 // zero values if no rows exist yet (cold start, no events processed).
@@ -77,7 +77,7 @@ func (r *Repo) LoadSnapshot(ctx context.Context, userID uuid.UUID) (UserMetrics,
 }
 
 // LoadBuckets returns a timeseries of buckets between [from, to] for the user.
-// We compute on-the-fly from the trades table — index idx_trades_user_entry
+// We compute on-the-fly from the trades table - index idx_trades_user_entry
 // makes this fast (sub-100ms even for years of data with proper indexing).
 func (r *Repo) LoadBuckets(ctx context.Context,
 	userID uuid.UUID, from, to time.Time, gran Granularity,
@@ -138,7 +138,7 @@ func bucketExpression(g Granularity) (string, error) {
 	}
 }
 
-// ─── Writes (called by the worker) ─────────────────────────────────────────
+// Writes (called by the worker)
 
 // SetPlanAdherenceScore upserts the rolling-window score on user_metrics.
 func (r *Repo) SetPlanAdherenceScore(ctx context.Context, userID uuid.UUID, score float64, window int) error {
@@ -204,7 +204,7 @@ func (r *Repo) UpsertEmotionStat(ctx context.Context, userID uuid.UUID, emo stri
 }
 
 // UpsertSessionTilt recomputes and stores tilt for the session by reading
-// the trades table directly. We group by (session_id, user_id) — every trade
+// the trades table directly. We group by (session_id, user_id) - every trade
 // in a session shares the same user_id (data invariant), so this is exact
 // and avoids needing a MIN aggregate over UUID (which Postgres lacks).
 func (r *Repo) UpsertSessionTilt(ctx context.Context, sessionID uuid.UUID) error {

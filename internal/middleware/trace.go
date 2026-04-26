@@ -1,5 +1,5 @@
 // Package middleware contains the per-request HTTP middleware chain:
-// trace-id → request logger → panic recoverer → JWT auth.
+// trace-id  request logger  panic recoverer  JWT auth.
 package middleware
 
 import (

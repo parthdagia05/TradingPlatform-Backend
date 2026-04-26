@@ -59,7 +59,7 @@ func Logger(base *slog.Logger) func(http.Handler) http.Handler {
 			if uid, ok := httpx.UserID(r.Context()); ok {
 				fields = append(fields, "userId", uid.String())
 			}
-			// 5xx → Error, 4xx → Warn, else Info. Lets log filters surface
+			// 5xx  Error, 4xx  Warn, else Info. Lets log filters surface
 			// problems without grepping every line.
 			switch {
 			case rec.status >= 500:

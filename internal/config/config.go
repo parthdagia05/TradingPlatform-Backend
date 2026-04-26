@@ -2,7 +2,7 @@
 //
 // Why a dedicated package?
 //   1. One place to look when you ask "what config does this app read?"
-//   2. Validation happens once, at startup — fail fast if anything's missing.
+//   2. Validation happens once, at startup - fail fast if anything's missing.
 //   3. The rest of the code reads typed fields (cfg.Port int) instead of
 //      sprinkling os.Getenv("PORT") + strconv.Atoi everywhere.
 package config

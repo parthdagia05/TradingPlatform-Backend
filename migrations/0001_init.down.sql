@@ -1,6 +1,6 @@
 -- 0001_init.down.sql
 -- Reverse migration: undo everything 0001_init.up.sql created.
--- Drop in reverse dependency order: trigger → function → table → enums.
+-- Drop in reverse dependency order: trigger - function - table - enums.
 
 DROP TRIGGER IF EXISTS trades_set_updated_at ON trades;
 DROP FUNCTION IF EXISTS trg_trades_set_updated_at();
