@@ -20,9 +20,10 @@ coverage.html
 *.swp
 .DS_Store
 
-# Load-test artifacts (generated, not source)
-/loadtest/results/
+# Load-test artifacts — keep the report + summary (spec-required), skip noisy run logs
+/loadtest/results/run.log
 /loadtest/*.json
+!/loadtest/results/summary.json
 !/loadtest/k6.js
 
 # Go module cache (only for forks/vendoring scenarios)
